@@ -78,7 +78,7 @@ function loadFile(JsPath, callback) {
 function debounce(fn, loadingFn, delay) {
 	delay = delay||500;
 	var timer;
-	console.log(timer);
+	// console.log(timer);
 	return function (option) {
 		if (loadingFn) loadingFn();
 		if (timer) {
@@ -101,11 +101,11 @@ angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 	$scope.loadFile = debounce( function(){
 		function fileLoaded(fileData){
 			$(".pathZh").html($scope.filePath+' 读取成功').css("color","green");
-			console.log(typeof(fileData))
+			// console.log(typeof(fileData))
 			$scope.rowList = fileData.split('\n');
 			$scope.rowTotal = $scope.rowList.length;
-			console.log($scope.rowTotal)
-			console.log($scope.rowList[$scope.rowTotal-1])
+			// console.log($scope.rowTotal)
+			// console.log($scope.rowList[$scope.rowTotal-1])
 			$.each($scope.rowList,function(index,item){
 				var itemHead = new Date(item.substring(0, 19)).getTime(); //取头时间
 				item = item.substring(28);
@@ -119,7 +119,6 @@ angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 			})
 		}
 		if ($scope.filePath){
-			console.log(2);
 			loadFile($scope.filePath, fileLoaded);
 		}
 		$scope.$digest();
@@ -167,7 +166,7 @@ $scope.roleInput = "△t<=1 \n△t > 1 && △t <= 5\n△t> 5 && △t<= 10 \n△t
 				if (item.AHead && item.flumeSendSec) {
 					validNum++;
 					let dT = Math.abs(item.AHead - item.flumeSendSec);
-					console.log(item.AHead, item.flumeSendSec, dT)
+					// console.log(item.AHead, item.flumeSendSec, dT)
 					$.each(roleList, (i, it)=>{
 						let bds = it.role.replaceAll("△t", "dT");
 						if (eval(bds)){
