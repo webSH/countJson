@@ -96,6 +96,7 @@ angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 	$scope.rowList = [];
 	$scope.jsonList = [];
 	$scope.debounce = debounce;
+	$scope.countOut = "";
 
 	$scope.loadFile = debounce( function(){
 		function fileLoaded(fileData){
@@ -106,10 +107,14 @@ angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 			console.log($scope.rowTotal)
 			console.log($scope.rowList[$scope.rowTotal-1])
 			$.each($scope.rowList,function(index,item){
-				var itemHead = item.substring(0, 28);
+				var itemHead = new Date(item.substring(0, 19)).getTime(); //取头时间
 				item = item.substring(28);
-				item = $.parseJSON(item);
-				item.AHead = itemHead; //把头插入到 json
+				try {
+					item = $.parseJSON(item);
+				} catch(e) {
+					setWarning("json 格式有错误 "+ e.message);
+				}
+				item.AHead = itemHead/1000; //把头插入到 json(秒)
 				$scope.jsonList.push(item);
 			})
 		}
@@ -141,6 +146,38 @@ angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 		}
 		$scope.$digest();
 	})
+/*
+△t <= 1 比率
+△t > 1 且 △t <= 5比率
+△t> 5 且 △t<= 10 比率
+△t> 10 比率
+*/
+	$scope.count = function (params) {
+		var validNum = 0, wantNumObj={XD1:0, D1XD5:0, D5XD10:0, D10:0};
+		if ($scope.jsonList.length){
+			$.each($scope.jsonList, function(index, item){
+				if (item.AHead && item.flumeSendSec) {
+					validNum++;
+					let dT = Math.abs(item.AHead - item.flumeSendSec);
+					console.log(item.AHead, item.flumeSendSec, dT)
+					if (dT<=1){
+						wantNumObj.XD1++;
+					}
+					if (dT>1 && dT<=5){
+						wantNumObj.D1XD5++;
+					}
+					if (dT>5 && dT<=10){
+						wantNumObj.D1XD5++;
+					}
+					if (dT>10){
+						wantNumObj.D10++;
+					}
+				}
+			})
+			$scope.validNum = validNum;
+			$scope.wantNumObj = wantNumObj;
+		}
+	}
 
 	$scope.reSet = function(){
 		$(".warningStr").html("");
@@ -203,7 +240,13 @@ $(function(){
 			<textarea ng-value="str(lineCt)" data-clipboard-text="{{str(lineCt)}}"></textarea>
 			<p style="word-break: break-all;">{{lineCt}}</p>
 		</div>
-		
+		<div>
+			<button ng-click="count()">统计</button>
+			<spna class="green">有效数据 {{validNum}} 条</spna>
+			<ul>
+				<li ng-repeat="(key,val) in wantNumObj">{{key}}：<b>{{val}}</b></li>
+			</ul>
+		</div>
 		<div class="tip">
 			<p><b>如无法读取文件：</b>配合静态文件目录使用时，在浏览器快捷方式-属性-目标，最后添加<b class="oran"> --allow-file-access-from-files</b>，（注意前面有 1 空格）保存。重启浏览器访问即可</p>
 		</div>
