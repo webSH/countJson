@@ -162,7 +162,10 @@ $scope.roleInput = "△t<=1 \n△t > 1 && △t <= 5\n△t> 5 && △t<= 10 \n△t
 			})
 		}
 		if ($scope.jsonList.length){
+			let n = 0; //计数
 			$.each($scope.jsonList, function(index, item){
+				n++;
+				console.log(n);
 				if (item.AHead && item.flumeSendSec) {
 					validNum++;
 					let dT = Math.abs(item.AHead - item.flumeSendSec);
