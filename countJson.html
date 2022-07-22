@@ -97,6 +97,9 @@ angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 	$scope.jsonList = [];
 	$scope.debounce = debounce;
 	$scope.countOut = "";
+	$scope.batchNum = 10000;
+	$scope.curNum = 0;
+	$scope.countLoading = "";
 
 	$scope.loadFile = debounce( function(){
 		function fileLoaded(fileData){
@@ -151,40 +154,47 @@ angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 △t> 5 且 △t<= 10 比率
 △t> 10 比率
 */
-$scope.roleInput = "△t<=1 \n△t > 1 && △t <= 5\n△t> 5 && △t<= 10 \n△t> 10";
+	$scope.roleInput = "△t<=1 \n△t > 1 && △t <= 5\n△t> 5 && △t<= 10 \n△t> 10";
 	$scope.count = function () {
-		let validNum = 0;
-		let roleList = [];
-		if ($scope.roleInput){
-			let tempRoles = $scope.roleInput.split('\n');
-			$.each(tempRoles, (i, item)=>{
-			 roleList.push({role:item, num:0})
-			})
-		}
-		if ($scope.jsonList.length){
-			let n = 0; //计数
-			$.each($scope.jsonList, function(index, item){
-				n++;
-				console.log(n);
-				if (item.AHead && item.flumeSendSec) {
-					validNum++;
-					let dT = Math.abs(item.AHead - item.flumeSendSec);
-					// console.log(item.AHead, item.flumeSendSec, dT)
-					$.each(roleList, (i, it)=>{
-						let bds = it.role.replaceAll("△t", "dT");
-						if (eval(bds)){
-							it.num++;
-						}
-					})
-				}
-			})
-			$scope.validNum = validNum;
-			$scope.wantNumRs = roleList;
-		}
+		$scope.countLoading = "统计中请稍候。。。";
+		setTimeout(() => {
+			let validNum = 0;
+			let roleList = [];
+			if ($scope.roleInput){
+				let tempRoles = $scope.roleInput.split('\n');
+				$.each(tempRoles, (i, item)=>{
+				roleList.push({outRole:item, role:item.replaceAll("△t", "dT"), num:0})
+				})
+			}
+			if ($scope.jsonList.length){
+				let n = 0; //计数
+				$.each($scope.jsonList, function(index, item){
+					n++;
+					if (n%1000===0) {$scope.curNum = n;}
+					if ( n>($scope.batchNum || 10000) ) {return false;} //退出循环
+					if (item.AHead && item.flumeSendSec) {
+						validNum++;
+						let dT = Math.abs(item.AHead - item.flumeSendSec);
+						// console.log(item.AHead, item.flumeSendSec, dT)
+						$.each(roleList, (i, it)=>{
+							let bds = it.role;
+							if (eval(bds)){
+								it.num++;
+							}
+						})
+					}
+				})
+				$scope.validNum = validNum;
+				$scope.wantNumRs = roleList;
+			}
+			$scope.countLoading = "统计完成！";
+			$scope.$digest();
+		}, 0);
 	}
 
 	$scope.reSet = function(){
 		$(".warningStr").html("");
+		$scope.countLoading = "";
 	}
 	$scope.reSet();
 })
@@ -247,10 +257,12 @@ $(function(){
 		<div>
 			<label for="inputRole">请输入规则表达式，每个规则一行</label>
 			<textarea id="inputRole" placeholder="输入规则表达式，每个规则一行" ng-model="roleInput" style="height: 10em;"></textarea>
+			<label for="batchNum">统计数量：</label><input id="batchNum" type="text" ng-model="batchNum" /><span class="red">尽量小于 10w(100000) 条</span>
 			<button ng-click="count()">统计</button>
 			<span class="green">有效数据 {{validNum}} 条</span>
+			<p class="green">{{countLoading}}</p>
 			<ul style="line-height: 1.5;">
-				<li ng-repeat="rs in wantNumRs">{{rs.role}}：<b>{{rs.num}}</b></li>
+				<li ng-repeat="rs in wantNumRs">{{rs.outRole}}：<b>{{rs.num}}</b></li>
 			</ul>
 		</div>
 		<div class="tip">
