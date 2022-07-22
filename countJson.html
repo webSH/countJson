@@ -152,30 +152,32 @@ angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 △t> 5 且 △t<= 10 比率
 △t> 10 比率
 */
-	$scope.count = function (params) {
-		var validNum = 0, wantNumObj={XD1:0, D1XD5:0, D5XD10:0, D10:0};
+$scope.roleInput = "△t<=1 \n△t > 1 && △t <= 5\n△t> 5 && △t<= 10 \n△t> 10";
+	$scope.count = function () {
+		let validNum = 0;
+		let roleList = [];
+		if ($scope.roleInput){
+			let tempRoles = $scope.roleInput.split('\n');
+			$.each(tempRoles, (i, item)=>{
+			 roleList.push({role:item, num:0})
+			})
+		}
 		if ($scope.jsonList.length){
 			$.each($scope.jsonList, function(index, item){
 				if (item.AHead && item.flumeSendSec) {
 					validNum++;
 					let dT = Math.abs(item.AHead - item.flumeSendSec);
 					console.log(item.AHead, item.flumeSendSec, dT)
-					if (dT<=1){
-						wantNumObj.XD1++;
-					}
-					if (dT>1 && dT<=5){
-						wantNumObj.D1XD5++;
-					}
-					if (dT>5 && dT<=10){
-						wantNumObj.D1XD5++;
-					}
-					if (dT>10){
-						wantNumObj.D10++;
-					}
+					$.each(roleList, (i, it)=>{
+						let bds = it.role.replaceAll("△t", "dT");
+						if (eval(bds)){
+							it.num++;
+						}
+					})
 				}
 			})
 			$scope.validNum = validNum;
-			$scope.wantNumObj = wantNumObj;
+			$scope.wantNumRs = roleList;
 		}
 	}
 
@@ -190,7 +192,7 @@ $(function(){
 	// 	textSelect($(this));	//除fill型input以外，单击选中
 	// });	//增加复制功能后，复制的input改在回调函数中执行textSelect();此处执行非复制input
 
-	var clipboard = new Clipboard("textarea",
+	var clipboard = new Clipboard("[copy]",
 		{text: function(dom){
 			return $(dom).val();
 		}}
@@ -237,14 +239,16 @@ $(function(){
 		<div>
 			<label><b>显示某一条：</b></label>
 			<input type="text" ng-model="disLineNum" ng-change="displayLine()" /> <span ng-bind="warning" class="red"></span>
-			<textarea ng-value="str(lineCt)" data-clipboard-text="{{str(lineCt)}}"></textarea>
+			<textarea ng-value="str(lineCt)" data-clipboard-text="{{str(lineCt)}}" copy></textarea>
 			<p style="word-break: break-all;">{{lineCt}}</p>
 		</div>
 		<div>
+			<label for="inputRole">请输入规则表达式，每个规则一行</label>
+			<textarea id="inputRole" placeholder="输入规则表达式，每个规则一行" ng-model="roleInput" style="height: 10em;"></textarea>
 			<button ng-click="count()">统计</button>
-			<spna class="green">有效数据 {{validNum}} 条</spna>
-			<ul>
-				<li ng-repeat="(key,val) in wantNumObj">{{key}}：<b>{{val}}</b></li>
+			<span class="green">有效数据 {{validNum}} 条</span>
+			<ul style="line-height: 1.5;">
+				<li ng-repeat="rs in wantNumRs">{{rs.role}}：<b>{{rs.num}}</b></li>
 			</ul>
 		</div>
 		<div class="tip">
