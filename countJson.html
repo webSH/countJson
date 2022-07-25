@@ -52,21 +52,22 @@ D:\Document\WeChat Files\diQueL\FileStorage\File\2022-07\order.data-2022-07-20-1
 C:\Users\20386\Desktop\80w.log
 */
 function loadFile(JsPath, callback) {
-	console.log(JsPath);
+	// console.time('名称X')
 	if (!JsPath) JsPath=$("#setLangJsPath").val();
 	if (JsPath) {
 		if (JsPath.substring(1,3)==":%5C" || JsPath.substring(1,3)==":/"){
 			JsPath="file:///"+JsPath;
 		}
-		// console.log(JsPath);
+		console.log(JsPath);
 	}
 	$.ajax(JsPath,{
 		type:"GET",
-		async:false,
+		// async:false,
 		dataType:"text",
 		success:function(data){
+				// console.timeEnd('名称X') 
 			if (data && callback) {
-				callback(data)
+				callback(data, getNow());
 			}
 		},
 		error:function(XMLHttpRequest, textStatus, errorThrown){
@@ -91,25 +92,37 @@ function debounce(fn, loadingFn, delay) {
 	};
 }
 
+function getNow(){
+	return new Date();
+}
+
 angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 	$scope.rowTotal = 0;
+	$scope.rowTotal_10pc = 0;
+	$scope.is100pc = 0;
+	$scope.pct = 0;
 	$scope.rowList = [];
 	$scope.jsonList = [];
 	$scope.debounce = debounce;
 	$scope.countOut = "";
-	$scope.batchNum = 10000;
+	$scope.validNum = 0; //有效数据
+	$scope.batchNum = 100000; //批次数量
 	$scope.curNum = 0;
 	$scope.countLoading = "";
+	$scope.offset = 8;
+	$scope.wantNumRs = []; //统计结果
+	$scope.loadding = true;
+	let loadFileDelay = 1000; //读取文件等待时间毫秒
 
 	$scope.loadFile = debounce( function(){
-		function fileLoaded(fileData){
-			$(".pathZh").html($scope.filePath+' 读取成功').css("color","green");
+		let startTime = getNow();
+		// console.log(startTime);
+		function fileLoaded(fileData, endTime){
+			// console.log(endTime);
 			// console.log(typeof(fileData))
 			$scope.rowList = fileData.split('\n');
 			$scope.rowTotal = $scope.rowList.length;
-			// console.log($scope.rowTotal)
-			// console.log($scope.rowList[$scope.rowTotal-1])
-			$.each($scope.rowList,function(index,item){
+			angular.forEach($scope.rowList,function(item, index){
 				var itemHead = new Date(item.substring(0, 19)).getTime(); //取头时间
 				item = item.substring(28);
 				try {
@@ -117,17 +130,21 @@ angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 				} catch(e) {
 					setWarning("json 格式有错误 "+ e.message);
 				}
-				item.AHead = itemHead/1000; //把头插入到 json(秒)
+				item.AHead = (itemHead/1000)+$scope.offset*3600; //把头插入到 json(秒)
 				$scope.jsonList.push(item);
 			})
+			$scope.loadding = false;
+			$(".pathZh").html($scope.filePath+' 读取成功，用时 '+ (getNow()-startTime) + ' 毫秒').css("color","green");
+			$scope.$digest();
 		}
 		if ($scope.filePath){
+			$(".pathZh").html('正在读取文件 '+$scope.filePath).css("color","red");
 			loadFile($scope.filePath, fileLoaded);
 		}
-		$scope.$digest();
 	}, function(){
-		$(".pathZh").html('正在读取文件 '+$scope.filePath).css("color","red");
-	},1000)
+		$scope.loadding = true;
+		$(".pathZh").html($scope.filePath).css("color","gray");
+	}, loadFileDelay);
 
 	$scope.str = function (obj) {
 		if (obj) return JSON.stringify(obj);
@@ -148,16 +165,19 @@ angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 		}
 		$scope.$digest();
 	})
-/*
-△t <= 1 比率
-△t > 1 且 △t <= 5比率
-△t> 5 且 △t<= 10 比率
-△t> 10 比率
-*/
+	
 	$scope.roleInput = "△t<=1 \n△t > 1 && △t <= 5\n△t> 5 && △t<= 10 \n△t> 10";
 	$scope.count = function () {
+		$scope.pct = 0;
+		$scope.batchNum = $scope.batchNum || 100000;
+		$scope.rowTotal_10pc = Math.ceil($scope.batchNum/10); // 10% 的数量
+		console.log($scope.rowTotal_10pc);
+		$scope.is100pc = $scope.batchNum % 10; // 是否正好 10 的倍数（==0 即为10的倍数）
+		$scope.loadding = true;
+		let startTime = getNow();
+		$scope.wantNumRs = [];
 		$scope.countLoading = "统计中请稍候。。。";
-		setTimeout(() => {
+		$timeout(() => {
 			let validNum = 0;
 			let roleList = [];
 			if ($scope.roleInput){
@@ -168,27 +188,49 @@ angularApp.controller("langSearch",function($scope,$http,$filter,$timeout){
 			}
 			if ($scope.jsonList.length){
 				let n = 0; //计数
-				$.each($scope.jsonList, function(index, item){
-					n++;
-					if (n%1000===0) {$scope.curNum = n;}
-					if ( n>($scope.batchNum || 10000) ) {return false;} //退出循环
-					if (item.AHead && item.flumeSendSec) {
-						validNum++;
-						let dT = Math.abs(item.AHead - item.flumeSendSec);
-						// console.log(item.AHead, item.flumeSendSec, dT)
-						$.each(roleList, (i, it)=>{
-							let bds = it.role;
-							if (eval(bds)){
-								it.num++;
-							}
-						})
+				let perCentTimes = 0;
+				let keepGoing = true;
+				angular.forEach($scope.jsonList, function(item, index){
+					if (keepGoing) {
+						// n++;
+						// if (n%10000===0) {$scope.curNum = n; //遍历中每一句程序消耗大量时间
+						// 	console.log($scope.curNum);
+						// }
+						// if ((index+1) == $scope.rowTotal_10pc*(perCentTimes+1)) {
+						// 	console.log(index, perCentTimes);
+						// 	perCentTimes++;
+						// 	$scope.pct = perCentTimes;
+						// 	console.log($scope.pct);
+						// }
+						if ( index+1 == ($scope.batchNum) ) {keepGoing = false;} //退出循环
+						if (item.AHead && item.flumeSendSec) {
+							validNum++;
+							let dT = Math.abs(item.AHead - item.flumeSendSec); //计算绝对差值 △t
+							// console.log(item.AHead, item.flumeSendSec, dT)
+							let roleListGoing = true;
+							angular.forEach(roleList, (it, i)=>{
+								if (roleListGoing) {
+									let bds = it.role;
+									if (eval(bds)){
+										it.num++;
+										roleListGoing = false;
+										// return false; //假设规则之间互斥，满足一个则跳出
+									}
+								}
+							})
+						}
 					}
 				})
+				if ($scope.is100pc>0) { // 不是10整倍数的情况下，统计完了再加 10%
+					perCentTimes++;
+					$scope.pct = perCentTimes;
+				}
 				$scope.validNum = validNum;
 				$scope.wantNumRs = roleList;
 			}
-			$scope.countLoading = "统计完成！";
-			$scope.$digest();
+			$scope.countLoading = "统计完成！用时 "+ (getNow()-startTime) + " 毫秒";
+			$scope.loadding = false;
+			// $scope.$digest();
 		}, 0);
 	}
 
@@ -236,6 +278,7 @@ $(function(){
 <body ng-app="root" ng-controller="langSearch">
 	<div id="langSearch" ng-cloak>
 		<div>
+			<p>例： C:\Users\20386\Desktop\80w.log</p>
 			<label for="setLangJsPath">设置 log 文件目录：</label>
 			<input id="setLangJsPath" ng-init="filePath=''" ng-model="filePath" ng-change="loadFile()">
 			<p class="pathZh"></p>
@@ -248,19 +291,27 @@ $(function(){
 		</div> -->
 		<!-- 查找结果↓ -->
 		<p>共 {{rowTotal}} 行</p>
-		<div>
+		<div class="dpN">
 			<label><b>显示某一条：</b></label>
 			<input type="text" ng-model="disLineNum" ng-change="displayLine()" /> <span ng-bind="warning" class="red"></span>
 			<textarea ng-value="str(lineCt)" data-clipboard-text="{{str(lineCt)}}" copy></textarea>
 			<p style="word-break: break-all;">{{lineCt}}</p>
 		</div>
 		<div>
-			<label for="inputRole">请输入规则表达式，每个规则一行</label>
-			<textarea id="inputRole" placeholder="输入规则表达式，每个规则一行" ng-model="roleInput" style="height: 10em;"></textarea>
-			<label for="batchNum">统计数量：</label><input id="batchNum" type="text" ng-model="batchNum" /><span class="red">尽量小于 10w(100000) 条</span>
-			<button ng-click="count()">统计</button>
-			<span class="green">有效数据 {{validNum}} 条</span>
-			<p class="green">{{countLoading}}</p>
+			<div>
+				<label for="offset">时区：</label><input type="text" style="width:3em" maxlength="3" id="offset" ng-model="offset" />
+			</div>
+			<div>
+				<label for="inputRole">请输入规则表达式，每个规则一行</label>
+				<textarea id="inputRole" placeholder="输入规则表达式，每个规则一行" ng-model="roleInput" style="height: 10em;"></textarea>
+			</div>
+			<div>
+				<label for="batchNum">统计数量：</label><input id="batchNum" type="text" ng-model="batchNum" /> {{batchNum/10000}} W <span class="red dpN"> 尽量小于 10w 条</span>
+			</div>
+			<div>	
+				<button ng-click="count()" ng-disabled="loadding">开始统计</button> <span>{{pct?pct+'%':''}}</span>
+			</div>
+			<p><span ng-show="wantNumRs.length>0" class="green">{{countLoading}}</span> 有效数据 {{validNum}} 条 (两个时间都有的数据)</p>
 			<ul style="line-height: 1.5;">
 				<li ng-repeat="rs in wantNumRs">{{rs.outRole}}：<b>{{rs.num}}</b></li>
 			</ul>
